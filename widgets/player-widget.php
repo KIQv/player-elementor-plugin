@@ -22,6 +22,60 @@ class Elementor_Player_Widget extends \Elementor\Widget_Base {
     }
 
     protected function _register_controls() {
+        // Controle para quantidade de posts (na aba Conteúdo)
+        $this->start_controls_section(
+            'content_section',
+            [
+                'label' => __('Content', 'elementor-player'),
+                'tab' => \Elementor\Controls_Manager::TAB_CONTENT,
+            ]
+        );
+    
+        // Número de posts inicial
+        $this->add_control(
+            'posts_per_page',
+            [
+                'label' => __('Number of Posts', 'elementor-player'),
+                'type' => \Elementor\Controls_Manager::NUMBER,
+                'default' => 3, // Valor padrão
+                'min' => 1, // Valor mínimo
+                'max' => 50, // Valor máximo
+                'step' => 1, // Incremento
+            ]
+        );
+    
+        // Quantidade de posts a carregar ao clicar em "Carregar Mais"
+        $this->add_control(
+            'load_more_posts_per_page',
+            [
+                'label' => __('Posts to Load on "Load More"', 'elementor-player'),
+                'type' => \Elementor\Controls_Manager::NUMBER,
+                'default' => 3, // Valor padrão
+                'min' => 1, // Valor mínimo
+                'max' => 50, // Valor máximo
+                'step' => 1, // Incremento
+                'condition' => [
+                    'pagination_type' => 'load_more', // Só aparece se o tipo for "Carregar Mais"
+                ],
+            ]
+        );
+    
+        // Tipo de paginação (Carregar Mais ou Anterior/Próximo)
+        $this->add_control(
+            'pagination_type',
+            [
+                'label' => __('Pagination Type', 'elementor-player'),
+                'type' => \Elementor\Controls_Manager::SELECT,
+                'default' => 'load_more', // Valor padrão
+                'options' => [
+                    'load_more' => __('Load More', 'elementor-player'),
+                    'prev_next' => __('Previous/Next', 'elementor-player'),
+                ],
+            ]
+        );
+    
+        $this->end_controls_section();
+
         // Controle para waveColor (na aba Estilo)
         $this->start_controls_section(
             'wave_section',
@@ -181,16 +235,62 @@ class Elementor_Player_Widget extends \Elementor\Widget_Base {
         $this->end_controls_section();
     }
 
+    protected function render_pagination($query) {
+        $total_pages = $query->max_num_pages;
+        $current_page = max(1, get_query_var('paged'));
+    
+        if ($total_pages > 1) {
+            echo '<div class="podcast-pagination">';
+    
+            // Botão "Carregar Mais" (se não for a última página)
+            if ($current_page < $total_pages) {
+                echo '<button id="load-more" data-page="' . ($current_page + 1) . '" data-total-pages="' . $total_pages . '">Carregar Mais</button>';
+            }
+    
+            echo '</div>';
+        }
+    }
+
+    protected function render_load_more($query) {
+        $total_pages = $query->max_num_pages;
+        $current_page = max(1, get_query_var('paged'));
+    
+        if ($current_page < $total_pages) {
+            echo '<div class="podcast-pagination">
+                    <button id="load-more" data-page="' . ($current_page + 1) . '" data-total-pages="' . $total_pages . '">Carregar Mais</button>
+                  </div>';
+        }
+    }
+    
+    protected function render_prev_next($query) {
+        $total_pages = $query->max_num_pages;
+        $current_page = max(1, get_query_var('paged'));
+    
+        if ($total_pages > 1) {
+            echo '<div class="podcast-pagination">';
+            previous_posts_link('« Anterior');
+            next_posts_link('Próximo »', $query->max_num_pages);
+            echo '</div>';
+        }
+    }
+
     protected function render() {
+        $settings = $this->get_settings_for_display();
+
+        // Quantidade de posts definida pelo usuário
+        $posts_per_page = $settings['posts_per_page'];
+        $pagination_type = $settings['pagination_type'];
 
         $args = array(
             'post_type' => 'podcast-episodios',
-            'posts_per_page' => -1,
+            'posts_per_page' => $posts_per_page, // Usa o valor definido no controle
+            'paged' => get_query_var('paged') ? get_query_var('paged') : 1, // Paginação
         );
+
         $episodios = new WP_Query($args);
 
         if ($episodios->have_posts()) :
-            // Listar os episodios
+            // Listar os episódios
             echo '<div class="episodios-container">';
             while ($episodios->have_posts()) : $episodios->the_post();
                 $data = get_the_date();
@@ -215,10 +315,17 @@ class Elementor_Player_Widget extends \Elementor\Widget_Base {
                             </span>
                             Play
                         </button>
-                      </div>';
+                    </div>';
             endwhile;
             wp_reset_postdata();
             echo '</div>';
+
+            // Paginação
+            if ($pagination_type === 'load_more') {
+                $this->render_load_more($episodios);
+            } else {
+                $this->render_prev_next($episodios);
+            }
             
             // Player de Áudio
             echo '<div id="audio-player" class="audio-player">

@@ -82,4 +82,30 @@ document.addEventListener("DOMContentLoaded", function() {
             });
         });
     });
+
+    const loadMoreButton = document.getElementById('load-more');
+
+    if (loadMoreButton) {
+        loadMoreButton.addEventListener('click', function() {
+            const nextPage = parseInt(this.getAttribute('data-page'));
+            const totalPages = parseInt(this.getAttribute('data-total-pages'));
+
+            fetch(`?paged=${nextPage}`)
+                .then(response => response.text())
+                .then(data => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(data, 'text/html');
+                    const newPosts = doc.querySelector('.episodios-container').innerHTML;
+
+                    document.querySelector('.episodios-container').insertAdjacentHTML('beforeend', newPosts);
+
+                    this.setAttribute('data-page', nextPage + 1);
+
+                    if (nextPage + 1 > totalPages) {
+                        this.remove();
+                    }
+                })
+                .catch(error => console.error('Erro ao carregar mais posts:', error));
+        });
+    }
 });
